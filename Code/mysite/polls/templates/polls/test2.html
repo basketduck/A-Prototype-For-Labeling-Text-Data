@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <style></style>
+
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="Width=device-Width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <title>Transparent and Steerable Active Learning</title>
+</head>
+
+<body>
+    <div class="container">
+        <div class="jumbotron"></div>
+        <div class="row" id="firstRow">
+            <div class="col-md-4" class="col-lg-4" id="TreeView">
+            </div>
+            <div class="col-md-8" class="col-lg-8" id="Heatmap">
+            </div>
+        </div>
+        <div class="row" id="secondRow">
+            <div class="col-md-4" class="col-lg-4" id="TreeView">
+            </div>
+            <div class="col-md-8" class="col-lg-8" id="TreeView_Normal">
+            </div>
+        </div>
+        <div class="row" id="thirdRow">
+            <div class="col-md-8" class="col-lg-8" id="Heatmap_Compare">
+            </div>
+        </div>
+    </div>
+    <script>
+        var jason_vectors = '{{vectors | safe }}'
+        var vectors = JSON.parse(jason_vectors);
+        console.log(vectors)
+
+        // var jason_docs = '{{docs|safe}}'
+        // var docs = JSON.parse(jason_docs)
+        // console.log(docs)
+
+        var jason_wordsTree = '{{wordsTree | safe}}'
+        var wordsTree = JSON.parse(jason_wordsTree)
+        console.log(wordsTree)
+
+        function getRndInteger(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function getMaxFro2DArray(TwoDArray) {
+            var max_value = -Infinity
+            for (var i = 0; i < TwoDArray.length; i++) {
+                var local_max = Math.max(...TwoDArray[i])
+                if (local_max > max_value) {
+                    max_value = local_max
+                }
+            }
+            return max_value
+        }
+
+        function getMinFro2DArray(TwoDArray) {
+            var min_value = Infinity
+            for (var i = 0; i < TwoDArray.length; i++) {
+                var local_min = Math.min(...TwoDArray[i])
+                if (local_min < min_value) {
+                    min_value = local_min
+                }
+            }
+            return min_value
+        }
+
+        function largestOfFour(arr) {
+            return arr.map(Function.apply.bind(Math.max, null));
+        }
+
+        /*-----HeatMap View--------*/
+        var height = 26
+        var numOfDoc = vectors.length
+        var innerheight = height * numOfDoc
+
+        var bb = document.querySelector('#Heatmap')
+            .getBoundingClientRect()
+        var innerwidth = bb.right - bb.left
+        var margin = {
+            left: 30,
+            top: 30,
+            right: 30,
+            bottom: 30
+        }
+        var cellWidth = (innerwidth - margin.left) / 100
+
+        function renderHeatmap(vectors) {
+            // var divHeight = bb.bottom - bb.top
+            // var svgWidth = 0.9 * divWidth
+            var data_docVec = vectors
+            var datamax = getMaxFro2DArray(data_docVec)
+            var datamin = getMinFro2DArray(data_docVec)
+            var color = d3.scaleSequentialSqrt([datamin, datamax], d3.interpolateRdBu)
+                // var color = d3.scaleSequential([datamin, datamax], d3.interpolateRdBu)
+            var x = d3.scaleLinear()
+                .domain([0, 100])
+                .rangeRound([margin.left, cellWidth - margin.right])
+                // var y = d3.scaleBand()
+                //     .domain(data.names)
+                //     .rangeRound([margin.top, margin.top + innerHeight])
+
+            xAxis = g => g
+                .call(g => g.append("g")
+                    .attr("transform", `translate(0,${margin.top})`)
+                    .call(d3.axisTop(x).ticks(null, "d"))
+                    .call(g => g.select(".domain").remove()))
+
+            svg_heatmap = d3.select("body")
+                .select("#firstRow")
+                .select("#Heatmap")
+                .append("svg")
+                .attr("viewBox", [0, 0, innerwidth, innerheight + margin.top + margin.bottom])
+                .attr("font-family", "sans-serif")
+                .attr("font-size", 10);
+
+            svg_heatmap.selectAll('g')
+                .data(data_docVec)
+                .enter()
+                .append('g')
+                .attr('transform', (d, i) => `translate(${margin.left}, ${margin.top+ i*height})`)
+                .selectAll('rect')
+                .data(d => d)
+                .enter()
+                .append('rect')
+                .attr('transform', (d, i) => `translate(${i*cellWidth}, 0)`)
+                .attr("width", cellWidth - 2)
+                .attr("height", height - 2)
+                .attr("fill", d => isNaN(d) ? "#eee" : d === 0 ? "#fff" : color(d))
+        }
+
+        function getCompareVector(vectors) {
+            var compareVectors = []
+            for (var i = 0; i < vectors.length; i++) {
+                var sub_vector = []
+                for (var j = 0; j < vectors[i].length; j++) {
+                    sub_vector.push((1 - Math.abs(vectors[i][j] - vectors[0][j])))
+                }
+                compareVectors.push(sub_vector)
+            }
+            return compareVectors
+        }
+
+        function renderHeatmap_compare(vectors) {
+            // var divHeight = bb.bottom - bb.top
+            // var svgWidth = 0.9 * divWidth
+
+            var data_docVec = getCompareVector(vectors)
+            console.log(data_docVec)
+            var datamax = getMaxFro2DArray(data_docVec)
+            console.log(datamax)
+            var datamin = getMinFro2DArray(data_docVec)
+            console.log(datamin)
+                // var color = d3.scaleSequentialLog([2 * datamax, datamin], d3.interpolateRdBu)
+            var color = d3.scaleSequential([datamin, datamax], d3.interpolateRdBu)
+            var x = d3.scaleLinear()
+                .domain([0, 100])
+                .rangeRound([margin.left, cellWidth - margin.right])
+                // var y = d3.scaleBand()
+                //     .domain(data.names)
+                //     .rangeRound([margin.top, margin.top + innerHeight])
+
+            xAxis = g => g
+                .call(g => g.append("g")
+                    .attr("transform", `translate(0,${margin.top})`)
+                    .call(d3.axisTop(x).ticks(null, "d"))
+                    .call(g => g.select(".domain").remove()))
+
+            svg_heatmap = d3.select("body")
+                .select("#thirdRow")
+                .select("#Heatmap_Compare")
+                .append("svg")
+                .attr("viewBox", [0, 0, innerwidth, innerheight + margin.top + margin.bottom])
+                .attr("font-family", "sans-serif")
+                .attr("font-size", 10);
+
+            svg_heatmap.selectAll('g')
+                .data(data_docVec)
+                .enter()
+                .append('g')
+                .attr('transform', (d, i) => `translate(${margin.left}, ${margin.top+ i*height})`)
+                .selectAll('rect')
+                .data(d => d)
+                .enter()
+                .append('rect')
+                .attr('transform', (d, i) => `translate(${i*cellWidth}, 0)`)
+                .attr("width", cellWidth - 2)
+                .attr("height", height - 2)
+                .attr("fill", d => isNaN(d) ? "#eee" : d === 0 ? "#fff" : color(d))
+        }
+
+
+        /*-----Tree View--------*/
+        var treeData = wordsTree
+
+        // function buildTree(data) {
+        //     const root = d3.hierarchy(treeData)
+        //     root.dx = 10
+        //     root.dy = innerwidth / (root.height + 1)
+        //     return d3.tree().nodeSize([root.dx, root.dy])(root)
+        // }
+
+        // // tree = buildTree(treeData)
+        function renderTree() {
+            tree = treeData => {
+                const root = d3.hierarchy(treeData)
+                root.dx = 10
+                root.dy = innerwidth / (root.height + 1)
+                return d3.tree().nodeSize([root.dx, root.dy])(root)
+            }
+            const root = tree(treeData)
+
+            let x0 = Infinity;
+            let x1 = -x0;
+            root.each(d => {
+                if (d.x > x1) x1 = d.x;
+                if (d.x < x0) x0 = d.x;
+            });
+
+            const svg_heatmap2 = d3.select("body")
+                .select("#secondRow")
+                .select("#TreeView_Normal")
+                .append("svg")
+                .attr("viewBox", [0, 0, innerwidth, x1 - x0 + root.dx * 2])
+            const g = svg_heatmap2.append("g")
+                .attr("font-family", "sans-serif")
+                .attr("font-size", 10)
+                .attr("transform", `translate(${root.dy / 3},${root.dx - x0})`)
+            const link = g.append("g")
+                .attr("fill", "none")
+                .attr("stroke", "#555")
+                .attr("stroke-opacity", 0.4)
+                .attr("stroke-width", 1.5)
+                .selectAll("path")
+                .data(root.links())
+                .join("path")
+                .attr("d", d3.linkHorizontal()
+                    .x(d => d.y)
+                    .y(d => d.x));
+            const node = g.append("g")
+                .attr("stroke-linejoin", "round")
+                .attr("stroke-width", 3)
+                .selectAll("g")
+                .data(root.descendants())
+                .join("g")
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+            node.append("circle")
+                .attr("fill", d => d.children ? "#555" : "#999")
+                .attr("r", 2.5);
+
+            node.append("text")
+                .attr("dy", "0.31em")
+                .attr("x", d => d.children ? -6 : 6)
+                .attr("text-anchor", d => d.children ? "end" : "start")
+                .text(d => d.data.name)
+                .clone(true).lower()
+                .attr("stroke", "white");
+        }
+
+        function autoBox() {
+            document.body.appendChild(this);
+            const {
+                x,
+                y,
+                width,
+                height
+            } = this.getBBox();
+            document.body.removeChild(this);
+            console.log([x, y, width, height])
+            return [x, y, width, height];
+        }
+
+        function renderRadialTree() {
+            var bb_treeView = document.querySelector('#TreeView')
+                .getBoundingClientRect()
+            var innerwidth_treeView = bb_treeView.right - bb_treeView.left
+            var margin_treeView = {
+                left: 50,
+                top: 50,
+                right: 50,
+                bottom: 50
+            }
+            radius = innerwidth_treeView / 3
+            data = d3.hierarchy(treeData)
+                .sort((a, b) => d3.ascending(a.data.name, b.data.name))
+            tree = d3.tree()
+                .size([2 * Math.PI, radius])
+                .separation((a, b) => (a.parent == b.parent ? 1 : 2) / a.depth)
+            const root = tree(data);
+
+            var translate_var = {
+                    x: innerwidth_treeView / 2,
+                    y: innerwidth_treeView / 2
+                }
+                // console.log(translate_var.x)
+            const svg_heatmap2 = d3.select("body")
+                // .select("#secondRow")
+                .select("#TreeView")
+                .append("svg")
+                .attr("viewBox", [0, 0, innerwidth_treeView, innerwidth_treeView])
+            svg_heatmap2.append("g")
+                .attr('transform', `translate(${translate_var.x}, ${translate_var.y})`)
+                .attr("fill", "none")
+                .attr("stroke", "#555")
+                .attr("stroke-opacity", 0.4)
+                .attr("stroke-width", 1.5)
+                .selectAll("path")
+                .data(root.links())
+                .join("path")
+                .attr("d", d3.linkRadial()
+                    .angle(d => d.x)
+                    .radius(d => d.y))
+            svg_heatmap2.append("g")
+                .attr('transform', `translate(${translate_var.x}, ${translate_var.y})`)
+                .selectAll("circle")
+                .data(root.descendants())
+                .join("circle")
+                .attr("transform", d => `
+        rotate(${d.x * 180 / Math.PI - 90})
+        translate(${d.y},0)
+      `)
+                .attr("fill", d => d.children ? "#555" : "#999")
+                .attr("r", 2.5)
+
+            svg_heatmap2.append("g")
+                .attr('transform', `translate(${translate_var.x}, ${translate_var.y})`)
+                .attr("font-family", "sans-serif")
+                .attr("font-size", 13)
+                .attr("stroke-linejoin", "round")
+                .attr("stroke-width", 3)
+                .selectAll("text")
+                .data(root.descendants())
+                .join("text")
+                .attr("transform", d => `
+        rotate(${d.x * 180 / Math.PI - 90}) 
+        translate(${d.y},0) 
+        rotate(${d.x >= Math.PI ? 180 : 0})
+      `)
+                .attr("dy", "0.31em")
+                .attr("x", d => d.x < Math.PI === !d.children ? 6 : -6)
+                .attr("text-anchor", d => d.x < Math.PI === !d.children ? "start" : "end")
+                .text(d => d.data.name)
+                .clone(true).lower()
+                .attr("stroke", "white")
+                .attr("viewBox", [0, 0, innerwidth, innerwidth])
+                // .attr('transform', `translate(${innerwidth/2}, ${innerwidth/2})`);
+        }
+
+        renderHeatmap(vectors)
+        renderRadialTree()
+            // renderTree()
+        renderHeatmap_compare(vectors)
+
+        /*-----Tree View--------*/
+
+        // renderTree()
+    </script>
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous">
+    </script>
